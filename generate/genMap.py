@@ -2,13 +2,23 @@ import os
 import osmnx as ox
 import pickle
 import pandas as pd
+from mapDataframe import reformat_df
+# from cleanedMapDF import reformat_df
 
+# setup directory
+
+# Get the directory path of the current file
+dir_path = os.path.dirname(os.path.abspath(__file__))
+
+
+# bbox coordinates
 north, south, east, west = 37.9549, 37.3249, -121.9694, -122.6194
 
+
 # Check if the graph file already exists
-if os.path.isfile('../outputs/network.pickle'):
+if os.path.isfile(os.path.join(dir_path, '../outputs/network.pickle')):
     print("OSMNX network already exists, loading from file...")
-    with open('../outputs/network.pickle', 'rb') as f:
+    with open(os.path.join(dir_path, '../outputs/network.pickle'), 'rb') as f:
         G_simplified = pickle.load(f)
 else:
     # Create the graph
@@ -33,21 +43,24 @@ else:
     print(f"Graph size reduced by {size_reduction_pct:.2f}%")
 
     # Save G_simplified to a file
-    with open('../outputs/network.pickle', 'wb') as f:
+    with open(os.path.join(dir_path, '../outputs/network.pickle'), 'wb') as f:
         pickle.dump(G_simplified, f)
 
     print("OSMNX Network Created and saved.")
 
 # Check if the dataframe file already exists
-if os.path.isfile('../outputs/network.csv'):
+if os.path.isfile(os.path.join(dir_path, '../outputs/network.csv')):
     print("Dataframe already exists, loading from file...")
-    df = pd.read_csv('../outputs/network.csv')
+    df = pd.read_csv(os.path.join(dir_path, '../outputs/network.csv'))
 else:
     # Convert the graph to a dataframe
     df = ox.graph_to_gdfs(G_simplified, nodes=False, edges=True)
 
+    # reformat the df
+    df = reformat_df(df)
+
     # Save the dataframe to a file
-    df.to_csv('../outputs/network.csv', index=False)
+    df.to_csv(os.path.join(dir_path, '../outputs/network.csv'), index=False)
 
     print("Dataframe created and saved.")
 

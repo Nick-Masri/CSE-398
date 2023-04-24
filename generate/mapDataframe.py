@@ -5,6 +5,7 @@ import shapely.wkt
 
 def filter_df(df):
     # Create a Boolean mask indicating which rows have end coordinates with latitudes within the valid range.
+    # Q: Were there rows that didn't meet this condition or are you just double checking
     lat_range_filter = (df['end_coords'].apply(lambda x: -90 <= x[0] <= 90))
 
     # Apply the mask to the DataFrame and return the filtered DataFrame.
@@ -14,6 +15,8 @@ def filter_df(df):
 
 
 def one_2_one_osmid_lanes(df):
+    # Q: what does this function do? is there not already a one to one mapping?
+    # Isn't the OSMID for nodes?
     # create a new dataframe with one-to-one mapping between osmid and lanes
     df['osmid'] = df['osmid'].apply(lambda x: x if isinstance(x, list) else [x])
     df['lanes'] = df['lanes'].apply(lambda x: x if isinstance(x, list) else [x])
@@ -35,39 +38,37 @@ def one_2_one_osmid_lanes(df):
 
 # Function to reformat a given DataFrame
 def reformat_df(df):
-    # List of column names to keep
-    cols_to_keep = ['osmid', 'oneway', 'lanes', 'ref', 'name', 'highway', 'maxspeed', 'reversed', 'length', 'geometry']
-
-    # Select only the columns in cols_to_keep and assign it back to the same variable
-    df = df[cols_to_keep]
-
     # Reset the index of the DataFrame
+    # I think a numerical index of edges is actually better than an index from startnode-endnode
     df = df.reset_index(drop=True)
 
     # Rename certain columns in the DataFrame
-    df = df.rename(columns={'u': 'start_node', 'v': 'end_node', 'name': 'road_name'})
+    df = df.rename(columns={'u_original': 'start_node', 'v_original': 'end_node', 'name': 'road_name'})
 
     # Reorder the columns in the DataFrame
-    df = df[
-        ['osmid', 'start_node', 'end_node', 'oneway', 'lanes', 'ref', 'road_name', 'highway', 'maxspeed', 'reversed',
+    # df = df[['osmid', 'start_node', 'end_node', 'oneway', 'lanes', 'ref', 'road_name', 'highway', 'maxspeed', 'reversed',
+    #      'length', 'geometry']]
+    df = df[['osmid', 'start_node', 'end_node', 'oneway', 'ref', 'road_name', 'highway', 'maxspeed', 'reversed',
          'length', 'geometry']]
 
-    # Generate a DataFrame that maps each OSM ID to a lane count
-    osmid_lanes_df = one_2_one_osmid_lanes(df)
+    # print(df.head())
 
-    # Concatenate the original DataFrame and the osmid_lanes_df on axis 1
-    df = pd.concat([df, osmid_lanes_df], axis=1)
+    # # Generate a DataFrame that maps each OSM ID to a lane count
+    # osmid_lanes_df = one_2_one_osmid_lanes(df)
+    #
+    # # Concatenate the original DataFrame and the osmid_lanes_df on axis 1
+    # df = pd.concat([df, osmid_lanes_df], axis=1)
 
     # Drop rows where either the 'osmid' or 'maxspeed' column has a missing value
     df = df.dropna(subset=['osmid', 'maxspeed'])
 
-    # Select all columns except the first one
+    # Select all columns except the first one (why, what's the first one)
     df = df.iloc[:, 1:]
 
-    # Explode the 'lanes' column so that each lane count value gets its own row
-    df = df.explode('lanes')
-
-    # Get the start and end coordinates for each row in the DataFrame
+    # Q: why is this a thing? I'm confused what's going on with lanes column
+    # df = df.explode('lanes')
+    #
+    # # Get the start and end coordinates for each row in the DataFrame
     df_w_coords = get_start_end_points(df)
 
     # Concatenate the df_w_coords DataFrame and the original DataFrame on axis 1
@@ -111,6 +112,7 @@ def reconfigure_n_filter(df):
         ~((start_coords['start_lat'] == start_coords['start_lon']) | (end_coords['end_lat'] == end_coords['end_lon']))]
 
     # filter out rows where length is less than or equal to 125
+    # Q: why does this? Shouldn't they be there even if they are small?
     df_filtered = df[df['length'] > 125]
 
     # reset index and return filtered DataFrame

@@ -6,46 +6,12 @@ from shapely.geometry import Point, box, Polygon
 from scipy.stats import norm
 from math import radians, sin, cos, sqrt, atan2, exp, pi
 import os
+from mapMatching.helpers import get_closest_point, get_distance
 
 """ Methods for use in map matching algorithm """
 
 
-def get_closest_point(point, road):
-    gps_lon, gps_lat = point['longitude'], point['latitude']
-    start_lat, start_lon = road['start']
-    end_lat, end_lon = road['end']
-
-    # Convert coordinates to radians
-    lat1, lon1 = gps_lat * pi / 180, gps_lon * pi / 180
-    lat2, lon2 = start_lat * pi / 180, start_lon * pi / 180
-    lat3, lon3 = end_lat * pi / 180, end_lon * pi / 180
-
-    # Calculate Haversine distance between GPS point and each endpoint
-    distance1 = great_circle((gps_lat, gps_lon), (start_lat, start_lon)).kilometers
-    distance2 = great_circle((gps_lat, gps_lon), (end_lat, end_lon)).kilometers
-
-    # Find closest point on line segment to GPS point
-    dx = lat3 - lat2
-    dy = lon3 - lon2
-    t = ((lat1 - lat2) * dx + (lon1 - lon2) * dy) / (dx * dx + dy * dy)
-    t = max(0, min(1, t))
-    closest_lat = lat2 + t * dx
-    closest_lon = lon2 + t * dy
-
-    # Convert closest point back to degrees
-    closest_lat_degrees = closest_lat * 180 / pi
-    closest_lon_degrees = closest_lon * 180 / pi
-
-    return (closest_lat_degrees, closest_lon_degrees)
-
-
-def get_distance(gps_point, road_point):
-    gps_lon, gps_lat = gps_point['longitude'], gps_point['latitude']
-    lat, lon = road_point[0], road_point[1]
-    return great_circle((gps_lat, gps_lon), (lat, lon)).kilometers
-
-
-class Match_GPS_Trajectory():
+class MapMatch:
     def __init__(self, network, gps_data, dist_tolerance=5, scale=4, beta=3):
 
         # params
@@ -61,7 +27,7 @@ class Match_GPS_Trajectory():
         print(f'Size of Network {network.shape}')
         self.network = network
 
-        ### define matrices
+        # define matrices
         # matrix containing the closest point on a road network to a gps point
         self.cp_mat = np.zeros((len(self.gps_data), len(self.network), 2), dtype=np.float64)
         # matrix containing the distance between closest point and gps point
@@ -176,7 +142,7 @@ class Match_GPS_Trajectory():
         n_obs = self.obs_prob.shape[0]
         n_states = self.obs_prob.shape[1]
 
-        # Initialize the viterbi and backpointer tables
+        # Initialize the viterbi and back-pointer tables
         viterbi_table = np.zeros((n_obs, n_states))
         backpointer_table = np.zeros((n_obs, n_states), dtype=int)
 
@@ -190,11 +156,11 @@ class Match_GPS_Trajectory():
                 # Calculate the scores for transitioning to this state from each previous state
                 trans_scores = viterbi_table[t - 1, :] * self.trans_prob[t - 1, :, r]
 
-                # Calculate the maximum score and corresponding backpointer
+                # Calculate the maximum score and corresponding back-pointer
                 max_score = np.max(trans_scores) * self.obs_prob[t, r]
                 backpointer = np.argmax(trans_scores)
 
-                # Update the viterbi and backpointer tables with the new values
+                # Update the viterbi and back-pointer tables with the new values
                 viterbi_table[t, r] = max_score
                 backpointer_table[t, r] = backpointer
 
