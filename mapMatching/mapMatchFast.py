@@ -1,18 +1,9 @@
-import math
-import pandas as pd
 import numpy as np
-from geopy.distance import great_circle
-from shapely.geometry import Point, box, Polygon
 from scipy.stats import norm
-from math import radians, sin, cos, sqrt, atan2, exp, pi
-import os
 from mapMatching.helpers import get_closest_point, get_distance
 
-""" Methods for use in map matching algorithm """
-
-
 class MapMatch:
-    def __init__(self, network, gps_data, dist_tolerance=5, scale=4, beta=3):
+    def __init__(self, network, gps_data, dist_tolerance=1, scale=4, beta=3):
 
         # params
         self.dist_tolerance = dist_tolerance
@@ -25,12 +16,14 @@ class MapMatch:
 
         # load network
         print(f'Size of Network {network.shape}')
-        self.network = network
+        self.network = self.filter_tree(network)
+        print(f'Size of Network {self.network.shape}')
+
 
         # define matrices
         # matrix containing the closest point on a road network to a gps point
         self.cp_mat = np.zeros((len(self.gps_data), len(self.network), 2), dtype=np.float64)
-        # matrix containing the distance between closest point and gps point
+        # matrix containing the distance between the closest point and gps point
         self.cd_mat = np.zeros((len(self.gps_data), len(self.network)), dtype=np.float64)
 
         # calculate observation probabilities
@@ -105,8 +98,7 @@ class MapMatch:
                 # if the probablity of being on road r_i at time t is zero, we don't have to calculate the trans prob
                 if self.obs_prob[t, r_i] != 0:
                     for r_j in range(R):
-                        # if the probablity of being on road r_j  at time t+1 is zero, we don't have to calculate the
-                        # trans prob
+                        # if the probablity of being on road r_j  at time t+1 is zero, we don't have to calculate the trans prob
                         if self.obs_prob[t + 1, r_j] != 0:
 
                             # get gps points
@@ -172,3 +164,32 @@ class MapMatch:
             state_seq[t] = backpointer_table[t + 1, state_seq[t + 1]]
 
         return state_seq
+
+    def filter_tree(self, network):
+        df = self.gps_data
+        min_lat = df['latitude'].min()
+        max_lat = df['latitude'].max()
+
+        min_long = df['longitude'].min()
+        max_long = df['longitude'].max()
+
+        buffer_m = 2000
+        buffer_degrees = (buffer_m / 1000) / 111.32
+        min_long = min_long - buffer_degrees
+        max_long = max_long + buffer_degrees
+        min_lat = min_lat - buffer_degrees
+        max_lat = max_lat + buffer_degrees
+
+        filtered_df = network[((network['start_coords'].apply(lambda x: x[0]) >= min_lat) |
+                               (network['end_coords'].apply(lambda x: x[0]) >= min_lat)) &
+                              ((network['start_coords'].apply(lambda x: x[0]) <= max_lat) |
+                               (network['end_coords'].apply(lambda x: x[0]) <= max_lat)) &
+                              ((network['start_coords'].apply(lambda x: x[1]) >= min_long) |
+                               (network['end_coords'].apply(lambda x: x[1]) >= min_long)) &
+                              ((network['start_coords'].apply(lambda x: x[1]) <= max_long) |
+                               (network['end_coords'].apply(lambda x: x[1]) <= max_long))
+                              ]
+
+        return filtered_df
+
+        

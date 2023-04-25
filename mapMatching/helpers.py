@@ -19,7 +19,10 @@ def get_closest_point(point, road):
     # Find the closest point online segment to GPS point
     dx = lat3 - lat2
     dy = lon3 - lon2
-    t = ((lat1 - lat2) * dx + (lon1 - lon2) * dy) / (dx * dx + dy * dy)
+    if dx == 0 and dy == 0:
+        t = 0
+    else:
+        t = ((lat1 - lat2) * dx + (lon1 - lon2) * dy) / (dx * dx + dy * dy)
     t = max(0, min(1, t))
     closest_lat = lat2 + t * dx
     closest_lon = lon2 + t * dy

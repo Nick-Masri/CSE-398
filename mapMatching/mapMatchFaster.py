@@ -1,23 +1,19 @@
-import math
-import pandas as pd
 import numpy as np
-from shapely.geometry import Point, box, Polygon
 from scipy.stats import norm
-import heapq
-from math import radians, sin, cos, sqrt, atan2, exp, pi
-import os
-from helpers import get_closest_point, get_distance
-
-""" Methods for use in map matching algorithm """
+from mapMatching.helpers import get_closest_point, get_distance
 
 
 class MapMatch:
-    def __init__(self, network, gps_data, dist_tolerance=5, scale=4, beta=3):
+    def __init__(self, network, gps_data, dist_tolerance=0.5, scale=4, beta=3):
 
         # params
         self.dist_tolerance = dist_tolerance
         self.scale = scale
         self.beta = beta
+
+        # hashmaps for speed
+        self.seen = set()
+        self.close_roads = {}
 
         # load gps gps_data
         print(f"Size of gps_data: {gps_data.shape}")
@@ -25,7 +21,8 @@ class MapMatch:
 
         # load network
         print(f'Size of Network {network.shape}')
-        self.network = network
+        self.network = self.filter_tree(network)
+        print(f'Size of Network {self.network.shape}')
 
         # define matrices
         # matrix containing the closest point on a road network to a gps point
@@ -63,6 +60,7 @@ class MapMatch:
         R = len(self.network)
 
         for t in range(T):
+            nearby_roads = []
             for r in range(R):
 
                 gps_point = self.gps_data.iloc[t]
@@ -76,16 +74,13 @@ class MapMatch:
                 self.cp_mat[t, r, 1] = closest_point[1]
                 self.cd_mat[t, r] = distance
 
-                if distance > self.dist_tolerance:
-                    obs_prob[t, r] = 0
-                else:
-                    prob = norm.pdf(distance, loc=0, scale=self.scale)
-                    if np.isnan(prob):
-                        # set probability to 1.0 when distance is 0
-                        obs_prob[t, r] = 1.0
-                    else:
-                        obs_prob[t, r] = prob
+                if distance <= self.dist_tolerance:
+                    if r not in self.seen:
+                        self.seen.add(r)
+                    nearby_roads.append(r)
+                    obs_prob[t, r] = norm.pdf(distance, loc=0, scale=self.scale)
 
+            self.close_roads[t] = nearby_roads
         return obs_prob
 
     def calc_trans_prob(self):
@@ -101,11 +96,12 @@ class MapMatch:
 
         # probability we transition from r_i to r_j
         for t in range(T - 1):
-            for r_i in range(R):
-                # if the probability of being on road r_i at time t is zero, we don't have to calculate the trans prob
+            candidates_roads = set(self.close_roads[t] + self.close_roads[t+1])
+            for r_i in candidates_roads:
+                # if the probablity of being on road r_i at time t is zero, we don't have to calculate the trans prob
                 if self.obs_prob[t, r_i] != 0:
-                    for r_j in range(R):
-                        # if the probability of being on road r_j  at time t+1 is zero, we don't have to calculate the
+                    for r_j in candidates_roads:
+                        # if the probablity of being on road r_j  at time t+1 is zero, we don't have to calculate the
                         # trans prob
                         if self.obs_prob[t + 1, r_j] != 0:
 
@@ -143,7 +139,7 @@ class MapMatch:
         n_obs = self.obs_prob.shape[0]
         n_states = self.obs_prob.shape[1]
 
-        # Initialize the viterbi and backpointer tables
+        # Initialize the viterbi and back-pointer tables
         viterbi_table = np.zeros((n_obs, n_states))
         backpointer_table = np.zeros((n_obs, n_states), dtype=int)
 
@@ -153,15 +149,15 @@ class MapMatch:
         # Loop through the remaining observations
         for t in range(1, n_obs):
             # Loop through the states
-            for r in range(n_states):
+            for r in self.seen:
                 # Calculate the scores for transitioning to this state from each previous state
                 trans_scores = viterbi_table[t - 1, :] * self.trans_prob[t - 1, :, r]
 
-                # Calculate the maximum score and corresponding backpointer
+                # Calculate the maximum score and corresponding back-pointer
                 max_score = np.max(trans_scores) * self.obs_prob[t, r]
                 backpointer = np.argmax(trans_scores)
 
-                # Update the viterbi and backpointer tables with the new values
+                # Update the viterbi and back-pointer tables with the new values
                 viterbi_table[t, r] = max_score
                 backpointer_table[t, r] = backpointer
 
@@ -172,3 +168,32 @@ class MapMatch:
             state_seq[t] = backpointer_table[t + 1, state_seq[t + 1]]
 
         return state_seq
+
+    def filter_tree(self, network):
+        df = self.gps_data
+        min_lat = df['latitude'].min()
+        max_lat = df['latitude'].max()
+
+        min_long = df['longitude'].min()
+        max_long = df['longitude'].max()
+
+        buffer_m = 2000
+        buffer_degrees = (buffer_m / 1000) / 111.32
+        min_long = min_long - buffer_degrees
+        max_long = max_long + buffer_degrees
+        min_lat = min_lat - buffer_degrees
+        max_lat = max_lat + buffer_degrees
+
+        filtered_df = network[((network['start_coords'].apply(lambda x: x[0]) >= min_lat) |
+                               (network['end_coords'].apply(lambda x: x[0]) >= min_lat)) &
+                              ((network['start_coords'].apply(lambda x: x[0]) <= max_lat) |
+                               (network['end_coords'].apply(lambda x: x[0]) <= max_lat)) &
+                              ((network['start_coords'].apply(lambda x: x[1]) >= min_long) |
+                               (network['end_coords'].apply(lambda x: x[1]) >= min_long)) &
+                              ((network['start_coords'].apply(lambda x: x[1]) <= max_long) |
+                               (network['end_coords'].apply(lambda x: x[1]) <= max_long))
+                              ]
+
+        return filtered_df
+
+
