@@ -1,7 +1,6 @@
 from geopy.distance import great_circle
 from math import pi
 
-
 def get_closest_point(point, road):
     gps_lon, gps_lat = point['longitude'], point['latitude']
     start_lat, start_lon = road['start_coords']
@@ -32,7 +31,6 @@ def get_closest_point(point, road):
     closest_lon_degrees = closest_lon * 180 / pi
 
     return closest_lat_degrees, closest_lon_degrees
-
 
 def get_distance(gps_point, road_point):
     gps_lon, gps_lat = gps_point['longitude'], gps_point['latitude']

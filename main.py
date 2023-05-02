@@ -3,6 +3,7 @@ import time
 import pandas as pd
 import ast
 from mapMatching.mapMatchFaster import MapMatch
+import numpy as np
 
 if __name__ == '__main__':
     # Check if train.csv and trips.csv exist
@@ -20,7 +21,6 @@ if __name__ == '__main__':
     #     print("Generating Road Network...")
     #     os.system('python3 generate/genMap.py')
 
-
     # load trips and train data
     trips = pd.read_csv('outputs/trips.csv', index_col=0)
     train_data = pd.read_csv('outputs/train.csv', index_col=0)
@@ -31,20 +31,37 @@ if __name__ == '__main__':
     network['end_coords'] = network['end_coords'].apply(ast.literal_eval)
 
     # create df structure
-    all_taxi_locations = pd.DataFrame(columns=["cabID", "tripID", "time", "gps_point",
+    if os.path.exists('outputs/results.csv'):
+        results = pd.read_csv('outputs/results.csv')
+    else:
+        results = pd.DataFrame(columns=["cabID", "tripID", "time", "gps_point",
                                                "road_segment", "road_point"])
 
-    for idx, trip in trips.iterrows():
+    for idx, trip in trips.iloc[2945:].iterrows():
+        if len(results[(results.tripID == idx) & (results.cabID == trip['cabID'])]) > 0:
+            print(f'Result already exists, skipping map matching for trip {idx}')
+            continue
+
         print("\n\n#####################################")
         print(f"# Map Matching for Trip {idx}")
         print("#####################################")
         start_time = time.time()
         data = train_data[train_data.cab_id == trip.cabID]
 
-        relevant_gps_data = data.iloc[trip['tripStartIDX']:trip['tripEndIDX'] + 1]
+        # for some reason some of the trips have the start index after the end index
+        # need to fix this error in the data generation
+        if trip['tripStartIDX'] > trip['tripEndIDX']:
+            print("Error: tripStartIDX > tripEndIDX")
+            continue
+
+        relevant_gps_data = data.loc[trip['tripStartIDX']:trip['tripEndIDX'] + 1]
         relevant_gps_data = relevant_gps_data[['latitude', 'longitude', 'time']]
 
-        map_match = MapMatch(network, relevant_gps_data)
+        try:
+            map_match = MapMatch(network, relevant_gps_data)
+        except np.core._exceptions._ArrayMemoryError:
+            print(f'Memory Error (network too big) for trip {idx}')
+            continue
 
         closest_points = []
         for road_idx, road in enumerate(map_match.state_seq):
@@ -53,8 +70,8 @@ if __name__ == '__main__':
         gps_points = [[lat, lon] for lat, lon in zip(relevant_gps_data['latitude'], relevant_gps_data['longitude'])]
 
         trip_output = pd.DataFrame({
-            "cabID": trip['cabID'] * len(relevant_gps_data),
-            "tripID": idx * len(relevant_gps_data),
+            "cabID": trip['cabID'],
+            "tripID": idx,
             "time": relevant_gps_data['time'],
             "gps_point": gps_points,
             "road_segment": map_match.road_edge_ids,
@@ -64,9 +81,9 @@ if __name__ == '__main__':
         trip_output["prev_road_segment"] = trip_output["road_segment"].shift(1)
         trip_output["prev_road_point"] = trip_output["road_point"].shift(1)
         trip_output["prev_time"] = trip_output["time"].shift(1)
-        all_taxi_locations = pd.concat([all_taxi_locations, trip_output])
+        results = pd.concat([results, trip_output])
 
-        all_taxi_locations.to_csv('outputs/results.csv')
+        results.to_csv('outputs/results.csv')
 
         # calculate total execution time
         total_time = time.time() - start_time
@@ -75,5 +92,3 @@ if __name__ == '__main__':
     print("\n\n#####################################")
     print(f"# Completed Execution of {len(trips)} trips")
     print("#####################################")
-
-

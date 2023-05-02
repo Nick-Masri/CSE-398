@@ -20,9 +20,9 @@ class MapMatch:
         self.gps_data = gps_data
 
         # load network
-        print(f'Size of Network {network.shape}')
+        print(f'Initial Size of Network {network.shape}')
         self.network = self.filter_tree(network)
-        print(f'Size of Network {self.network.shape}')
+        print(f'Filtered Size of Network {self.network.shape}')
 
         # define matrices
         # matrix containing the closest point on a road network to a gps point
@@ -31,18 +31,18 @@ class MapMatch:
         self.cd_mat = np.zeros((len(self.gps_data), len(self.network)), dtype=np.float64)
 
         # calculate observation probabilities
-        print("\n\nCalculating Observation Probability")
+        print("\nCalculating Observation Probability")
         print(f"Number of iterations (network * gps data size) = {len(self.gps_data) * len(self.network)}")
         self.obs_prob = self.calc_obs_prob()
 
-        # Calcualte the transition probabilities
-        print("\n\nCalculating Transition Probability")
+        # Calculate the transition probabilities
+        print("\nCalculating Transition Probability")
         print("Total Num. Iterations for solution (Road Net. size^2 * GPS data size): {size}".format(
             size=len(self.gps_data) * len(self.network) ** 2))
         self.trans_prob = self.calc_trans_prob()
 
         # Calculating State Sequences
-        print("\n\nApplying Viterbi Algorithm")
+        print("\nApplying Viterbi Algorithm")
         self.state_seq = self.viterbi_algorithm()
         self.road_edge_ids = self.network.iloc[self.state_seq.tolist()].index
         print("Finished")
@@ -98,7 +98,7 @@ class MapMatch:
         for t in range(T - 1):
             candidates_roads = set(self.close_roads[t] + self.close_roads[t+1])
             for r_i in candidates_roads:
-                # if the probablity of being on road r_i at time t is zero, we don't have to calculate the trans prob
+                # if the probability of being on road r_i at time t is zero, we don't have to calculate the trans prob
                 if self.obs_prob[t, r_i] != 0:
                     for r_j in candidates_roads:
                         # if the probablity of being on road r_j  at time t+1 is zero, we don't have to calculate the
@@ -171,28 +171,30 @@ class MapMatch:
 
     def filter_tree(self, network):
         df = self.gps_data
-        min_lat = df['latitude'].min()
-        max_lat = df['latitude'].max()
+        min_lat = np.min(df['latitude'])
+        max_lat = np.max(df['latitude'])
 
-        min_long = df['longitude'].min()
-        max_long = df['longitude'].max()
+        min_long = np.min(df['longitude'])
+        max_long = np.max(df['longitude'])
 
-        buffer_m = 2000
+        buffer_m = 1000
         buffer_degrees = (buffer_m / 1000) / 111.32
         min_long = min_long - buffer_degrees
         max_long = max_long + buffer_degrees
         min_lat = min_lat - buffer_degrees
         max_lat = max_lat + buffer_degrees
 
-        filtered_df = network[((network['start_coords'].apply(lambda x: x[0]) >= min_lat) |
-                               (network['end_coords'].apply(lambda x: x[0]) >= min_lat)) &
-                              ((network['start_coords'].apply(lambda x: x[0]) <= max_lat) |
-                               (network['end_coords'].apply(lambda x: x[0]) <= max_lat)) &
-                              ((network['start_coords'].apply(lambda x: x[1]) >= min_long) |
-                               (network['end_coords'].apply(lambda x: x[1]) >= min_long)) &
-                              ((network['start_coords'].apply(lambda x: x[1]) <= max_long) |
-                               (network['end_coords'].apply(lambda x: x[1]) <= max_long))
-                              ]
+        start_lat = network['start_coords'].apply(lambda x: x[0])
+        start_long = network['start_coords'].apply(lambda x: x[1])
+        end_lat = network['end_coords'].apply(lambda x: x[0])
+        end_long = network['end_coords'].apply(lambda x: x[1])
+
+        lat_mask = np.logical_or(np.logical_and(start_lat >= min_lat, start_lat <= max_lat),
+                                 np.logical_and(end_lat >= min_lat, end_lat <= max_lat))
+        long_mask = np.logical_or(np.logical_and(start_long >= min_long, start_long <= max_long),
+                                  np.logical_and(end_long >= min_long, end_long <= max_long))
+
+        filtered_df = network[lat_mask & long_mask]
 
         return filtered_df
 
