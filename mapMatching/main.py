@@ -7,7 +7,7 @@ import numpy as np
 
 if __name__ == '__main__':
     # Check if train.csv and trips.csv exist
-    if os.path.exists('outputs/train.csv') and os.path.exists('outputs/trips.csv'):
+    if os.path.exists('../outputs/train.csv') and os.path.exists('../outputs/trips.csv'):
         print('train.csv and trips.csv already exist. Skipping data generation...')
     else:
         # Run the data generation script
@@ -22,17 +22,17 @@ if __name__ == '__main__':
     #     os.system('python3 generate/genMap.py')
 
     # load trips and train data
-    trips = pd.read_csv('outputs/trips.csv', index_col=0)
-    train_data = pd.read_csv('outputs/train.csv', index_col=0)
+    trips = pd.read_csv('../outputs/trips.csv', index_col=0)
+    train_data = pd.read_csv('../outputs/train.csv', index_col=0)
 
     # load the network
-    network = pd.read_csv('outputs/osmnx-df.csv')
+    network = pd.read_csv('../outputs/osmnx-df.csv')
     network['start_coords'] = network['start_coords'].apply(ast.literal_eval)
     network['end_coords'] = network['end_coords'].apply(ast.literal_eval)
 
     # create df structure
-    if os.path.exists('outputs/results.csv'):
-        results = pd.read_csv('outputs/results.csv')
+    if os.path.exists('../outputs/results.csv'):
+        results = pd.read_csv('../outputs/results.csv')
     else:
         results = pd.DataFrame(columns=["cabID", "tripID", "time", "gps_point",
                                                "road_segment", "road_point"])
